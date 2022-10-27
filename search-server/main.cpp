@@ -9,9 +9,6 @@
 #include <map>
 #include <numeric>
 
-
-//double relevance = log(x/y);
-
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
@@ -64,17 +61,8 @@ public:
             stop_words_.insert(word);
         }
     }
-
-    /*
-    for (string addressee : holmes_addressees) {
-    cout << "Текст открытки:"s << endl;
-    cout << "С новым годом, "s << addressee << "!"s << endl;
-    cout << endl;
-}
-    */
     
-
-    
+  
     void AddDocument(int document_id, const string& document) {
         const vector<string> words = SplitIntoWordsNoStop(document);
         const double inverse_word_count = 1.0 / words.size();  
@@ -83,15 +71,8 @@ public:
         
         for (const string& word : words)
         {
-  //cout << word_to_document_freqs_[word][document_id] << endl;
-            //Is math formula correct? Yes!!!
             word_to_document_freqs_[word][document_id] += inverse_word_count;            
-      //      cout << document_id << " words = "s << word << "  inv_word_count" << inverse_word_count << endl;
-
-        }        
-        
-    //    cout << "document_count_ =" << document_count_ << endl;
-        
+        }            
         documents_.push_back({document_id, words});
     }
 
@@ -186,17 +167,12 @@ map<string, map<int, double>> word_to_document_freqs_;
             if (word_to_document_freqs_.count(word) == 0)
             {
                 continue;
-            }
-           // const double inverse_document_freq = ComputeWordInverseDocumentFreq(word);
-            const double inverse_document_freq = log((documents_.size()) * 1.0 / word_to_document_freqs_.at(word).size());
-
-//            cout << "inverse_document_freq = " << inverse_document_freq << endl;
+            } 
             
+            const double inverse_document_freq = log((documents_.size()) * 1.0 / word_to_document_freqs_.at(word).size());          
             
             for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word))
             {
-
-
                 {
                     document_to_relevance[document_id] += term_freq * inverse_document_freq;
                 }
@@ -222,10 +198,7 @@ map<string, map<int, double>> word_to_document_freqs_;
         {
             matched_documents.push_back(
             {document_id, relevance});
-                //, documents_.at(document_id).rating});
-        }
-        
-     
+        }         
         
         return matched_documents;
     }
