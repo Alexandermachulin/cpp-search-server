@@ -1,0 +1,158 @@
+#include <cassert>
+#include <iostream>
+#include <map>
+#include <set>
+#include <sstream>
+#include <string>
+
+using namespace std;
+
+class Synonyms {
+public:
+    void Add(const string& first_word, const string& second_word) {
+        synonyms_[first_word].insert(second_word);
+        synonyms_[second_word].insert(first_word);
+    //    cout << "I am in Add"<< endl; 
+        
+    }
+
+    size_t GetSynonymCount(const string& word) const {
+        if (synonyms_.count(word) != 0) {
+            return synonyms_.at(word).size();
+        }
+        return 0;
+    }
+
+    bool AreSynonyms(const string& first_word, const string& second_word) const {
+        // Напишите недостающий код
+   //     cout << "I am in AddSynonyms"<< endl; 
+   //     void PrintMap(const map<string, int>& m) {
+   // cout << "Size: "s << synonyms_.size() << endl;
+//    for (const auto& [key, value]: synonyms_) {
+    //    cout << key << " - "s  << endl;
+//    }
+//} 
+//     cout << "I am after key in AddSynonyms"<< endl;    
+//     cout << "first_word"  << first_word << "second_word"  << second_word << endl; 
+        
+     //Test for iterator
+ //       std::map<string,std::set<string> > mp;
+//std::map<string,std::set<string> >::const_iterator row;
+//std::set<string>:: const_iterator col;
+
+
+for(auto const& pair : synonyms_) {
+  //  cout << pair.first << ": ";
+    
+     //if (pair.first ==  first_word) {  cout <<"!!!!"<<endl;}
+    
+    for(auto const& elem : pair.second) {
+    //    cout << elem << ", ";
+        
+      if ((pair.first ==  first_word && elem == second_word) || (pair.first ==second_word &&  elem == first_word)) {
+       //             cout << "YES !!!!" << endl; 
+            return true;
+            }      
+        
+        
+    }
+  //  cout << "\n";
+}
+        
+        
+        
+      
+        
+        
+        
+        
+/*        
+  for(auto const& pair :synonyms_) {
+        cout << pair.first << ": ";//melody
+//        if (pair.first ==  first_word) {  cout <<"!!!!"<<endl;} 
+        //cout << "I am in Add"<< endl; 
+        for(auto const& elem : pair.second)
+        {
+//        cout << elem << ", ";//tune
+//        cout <<  "pair.first " << pair.first << endl;
+       
+        if ((pair.first ==  first_word && elem == second_word) || (pair.first ==second_word &&  elem == first_word)) {
+                    //cout << "YES !!!!" << endl; 
+            return true;
+            }            
+            
+        }
+        
+  }    
+    */    
+  //  cout << "i am in return false" << endl;   
+    return false;    
+        
+    }
+
+private:
+    map<string, set<string>> synonyms_;
+};
+
+void TestAddingSynonymsIncreasesTheirCount() {
+    Synonyms synonyms;
+    assert(synonyms.GetSynonymCount("music"s) == 0);
+    assert(synonyms.GetSynonymCount("melody"s) == 0);
+
+    synonyms.Add("music"s, "melody"s);
+    assert(synonyms.GetSynonymCount("music"s) == 1);
+    assert(synonyms.GetSynonymCount("melody"s) == 1);
+
+    synonyms.Add("music"s, "tune"s);
+    assert(synonyms.GetSynonymCount("music"s) == 2);
+    assert(synonyms.GetSynonymCount("tune"s) == 1);
+    assert(synonyms.GetSynonymCount("melody"s) == 1);
+    
+    assert(synonyms.AreSynonyms("music"s,"melody"s) == true); 
+    assert(synonyms.AreSynonyms("music"s,"melod"s) == false);
+    
+}
+
+void TestAreSynonyms() {
+  //   Synonyms synonyms1;
+  //   assert(synonyms1.AreSynonyms("music"s,"melody"s) == true);     
+    
+}
+
+void TestSynonyms() {
+    TestAddingSynonymsIncreasesTheirCount();
+   // TestAreSynonyms();
+}
+
+int main() {
+    TestSynonyms();
+
+    Synonyms synonyms;
+
+    string line;
+    while (getline(cin, line)) {
+        istringstream command(line);
+        string action;
+        command >> action;
+
+        if (action == "ADD"s) {
+            string first_word, second_word;
+            command >> first_word >> second_word;
+            synonyms.Add(first_word, second_word);
+        } else if (action == "COUNT"s) {
+            string word;
+            command >> word;
+            cout << synonyms.GetSynonymCount(word) << endl;
+        } else if (action == "CHECK"s) {
+            string first_word, second_word;
+            command >> first_word >> second_word;
+            if (synonyms.AreSynonyms(first_word, second_word)) {
+                cout << "YES"s << endl;
+            } else {
+                cout << "NO"s << endl;
+            }
+        } else if (action == "EXIT"s) {
+            break;
+        }
+    }
+}
