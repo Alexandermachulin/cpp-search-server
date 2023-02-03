@@ -94,8 +94,7 @@ public:
             : SearchServer(SplitIntoWords(stop_words_text))
     {
         for (auto& x : stop_words_) {
-            if (!IsValidWord(x)) {
-                // <<  "!IsValidWord" << !IsValidWord << endl;
+            if (!IsValidWord(x)) {              
                 throw invalid_argument("Bug in constructor2"s);
             }
         }
