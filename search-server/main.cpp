@@ -287,8 +287,8 @@ private:
              
    //     cout << "query.minus_words.empty() ="  << query.minus_words.empty() << endl; 
   //      cout << "query.plus_words.empty() ="  << query.plus_words.empty() << endl;         
-        if ( query.minus_words.empty() and query.plus_words.empty()) 
-        {throw invalid_argument("Empty words"s); }      
+      /*  if ( query.minus_words.empty() and query.plus_words.empty()) 
+        {throw invalid_argument("Empty words"s); } */     
         return query;
     }
 
