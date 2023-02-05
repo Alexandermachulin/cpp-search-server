@@ -154,18 +154,9 @@ public:
         return documents_.size();
     }
 
-    tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {
-
-//Для ревьюера! Я перенес проверку и выброс исключения в ParseQuery (строка 290-291), 
-//но этом случае не проходит проверка. 
-//Возможно это связано с тем, что в тексте задания требуется сделать исключения именно в этой части:
-//"Метод MatchDocument должен возвращать tuple<vector<string>, DocumentStatus>, выбрасывая исключение //invalid_argument"         
-        
-        if (const auto parsed_query = ParseQuery(raw_query); parsed_query.minus_words.empty() and parsed_query.plus_words.empty())
-        {throw invalid_argument("Bug in MatchDocument"s); }
-        else 
+    tuple<vector<string>, DocumentStatus> MatchDocument(const string& raw_query, int document_id) const {        
+        const auto parsed_query = ParseQuery(raw_query);
         {
-           // const auto parsed_query = ParseQuery(raw_query);
             Query query = parsed_query;
             vector<string> matched_words;
             for (const string& word : query.plus_words) {
@@ -283,12 +274,7 @@ private:
                 }
             }
                         
-        }
-             
-   //     cout << "query.minus_words.empty() ="  << query.minus_words.empty() << endl; 
-  //      cout << "query.plus_words.empty() ="  << query.plus_words.empty() << endl;         
-      /*  if ( query.minus_words.empty() and query.plus_words.empty()) 
-        {throw invalid_argument("Empty words"s); } */     
+        }     
         return query;
     }
 
@@ -373,4 +359,3 @@ int main() {
     // std::cout << "Hello, Students and supervisors!" << std::endl;
     return 0;
 }
-
