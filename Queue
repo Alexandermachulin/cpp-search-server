@@ -1,0 +1,615 @@
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <map>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+#include <numeric>
+#include <optional>
+#include <stdexcept>
+#include <deque>
+
+using namespace std;
+
+const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const double ERROR = 1e-6;
+
+/**
+ *  Считывание строки
+ */
+string ReadLine() {
+	string result;
+	getline(cin, result);
+	return result;
+}
+/**
+ * Считывание числа типа int с консоли
+ */
+int ReadLineWithNumber() {
+	int result;
+	cin >> result;
+	ReadLine();
+	return result;
+}
+
+/**
+ * Разделение входной строки на отдельные слова без пробелов
+ */
+static vector<string> SplitIntoWords(const string &text) {
+	vector<string> words;
+	string word;
+
+	for (const char c : text) {
+		if (c == ' ') {
+			if (!word.empty()) {
+				words.push_back(word);
+				word.clear();
+			}
+		} else {
+			word += c;
+		}
+	}
+	if (!word.empty()) {
+		words.push_back(word);
+	}
+
+	return words;
+}
+
+/**
+ * Проверка на наличие спецсимволов в слове
+ */
+static bool IsValidWord(const string &word) {
+	// A valid word must not contain special characters
+	return none_of(word.begin(), word.end(), [](char c) {
+		return c >= '\0' && c < ' ';
+	});
+}
+
+/**
+ * Вычисление среднего рейтинга на основе вектора оценок
+ */
+static int ComputeAverageRating(const vector<int> &ratings) {
+	if (ratings.empty()) {
+		return 0;
+	}
+	int rating_sum = accumulate(ratings.begin(), ratings.end(), 0);
+
+	return rating_sum / static_cast<int>(ratings.size());
+}
+
+/**
+ * Структура, которая хранит идентификатор документа,
+ * его релевантность, рассчитанную с помощью алгоритма TF-IDF,
+ *  а также его рейтинг
+ */
+
+struct Document {
+
+	Document() = default;
+
+	Document(int external_id, double external_relevance, int external_rating) :
+			id(external_id), relevance(external_relevance), rating(
+					external_rating) {
+	}
+
+	int id = 0;
+	double relevance = 0.0;
+	int rating = 0;
+
+};
+
+/**
+ * Перечисление типов документов
+ */
+enum class DocumentStatus {
+	ACTUAL, IRRELEVANT, BANNED, REMOVED,
+};
+
+template<class Iterator>
+class IteratorRange {
+public:
+
+	IteratorRange(Iterator begin, Iterator end) :
+			begin_(begin), end_(end), size_(distance(begin_, end_)) {
+	}
+
+	auto begin() const {
+		return begin_;
+	}
+	auto end() const {
+		return end_;
+	}
+
+	size_t size() {
+		return size_;
+	}
+
+private:
+	Iterator begin_;
+	Iterator end_;
+	size_t size_;
+
+};
+template<typename Iterator>
+ostream& operator<<(ostream &os, IteratorRange<Iterator> range) {
+	for (Iterator iter = range.begin(); iter != range.end(); ++iter) {
+		os << *iter;
+	}
+
+	return os;
+}
+
+ostream& operator<<(ostream &out, const Document &document) {
+	out << "{ document_id = "s << document.id << ", relevance = "s
+			<< document.relevance << ", rating = "s << document.rating << " }"s;
+	return out;
+}
+
+template<typename Iterator>
+class Paginator {
+public:
+	Paginator(Iterator begin, Iterator end, size_t page_size) {
+		for (Iterator iter = begin; iter < end; advance(iter, page_size)) {
+			size_t range = distance(iter, end);
+			if (range < page_size) {
+				pages_.push_back(IteratorRange(iter, end));
+
+			} else {
+				pages_.push_back(IteratorRange(iter, iter + page_size));
+
+			}
+
+		}
+
+	}
+
+	auto begin() const {
+		return pages_.begin();
+	}
+
+	auto end() const {
+		return pages_.end();
+	}
+	size_t size() const {
+		return pages_.size();
+	}
+
+private:
+	vector<IteratorRange<Iterator>> pages_;
+
+};
+
+template<typename Container>
+auto Paginate(const Container &c, size_t page_size) {
+	return Paginator(begin(c), end(c), page_size);
+}
+
+/**
+ * класс поисковой машины SearchServer
+ */
+
+class SearchServer {
+
+public:
+
+	explicit SearchServer(const string &stop_words_text) :
+			SearchServer(SplitIntoWords(stop_words_text)) {
+
+	}
+
+	template<typename StringCollection>
+	explicit SearchServer(const StringCollection &stop_words) {
+		for (const string &stop_word : stop_words) {
+
+			if (!IsValidWord(stop_word)) {
+				throw invalid_argument(
+						"Stop word "s + stop_word
+								+ " contains an invalid character!"s);
+			}
+
+			if (!stop_word.empty()) {
+				stop_words_.insert(stop_word);
+			}
+
+		}
+	}
+
+	/**
+	 * Получить количество документов
+	 */
+
+	int GetDocumentCount() const {
+		return static_cast<int>(documents_.size());
+	}
+
+	int GetDocumentId(int index) {
+		return document_identifiers_.at(index);
+	}
+
+	void AddDocument(int document_id, const string &document,
+			DocumentStatus status, const vector<int> &ratings) {
+
+		if (document_id < 0) {
+			throw invalid_argument(
+					"The document identifier "s + to_string(document_id)
+							+ " cannot be negative!"s);
+		}
+		if (documents_.count(document_id)) {
+			throw invalid_argument(
+					"The document with identifier "s + to_string(document_id)
+							+ " is already in the search engine!"s);
+		}
+
+		const vector<string> words = SplitIntoWordsNoStop(document);
+
+		document_identifiers_.push_back(document_id);
+		const double inv_word_count = 1.0 / words.size();
+		for (const string &word : words) {
+			word_to_document_freqs_[word][document_id] += inv_word_count;
+		}
+		documents_.emplace(document_id,
+				DocumentData { ComputeAverageRating(ratings), status });
+
+	}
+
+	vector<Document> FindTopDocuments(const string &raw_query) const {
+
+		return FindTopDocuments(raw_query,
+				[](int document_id, DocumentStatus status, int rating) {
+					return status == DocumentStatus::ACTUAL;
+				});
+	}
+	vector<Document> FindTopDocuments(const string &raw_query,
+			const DocumentStatus &external_status) const {
+
+		return FindTopDocuments(raw_query,
+				[&external_status](int document_id, DocumentStatus status,
+						int rating) {
+					return status == external_status;
+				});
+	}
+
+	/**
+	 * В данном методе результат работы метода FindAllDocuments сохраняется в коллекцию matched_documents типа vector<Document>
+	 * коллекция сортируется по релевантности по убыванию
+	 * Метод возвращает коллекцию, размер которой не превышает значение глобальной константы MAX_RESULT_DOCUMENT_COUNT
+	 */
+	template<typename DocumentPredicate>
+	vector<Document> FindTopDocuments(const string &raw_query,
+			DocumentPredicate predicate) const {
+		const Query query = ParseQuery(raw_query);
+
+		auto matched_documents = FindAllDocuments(query, predicate);
+
+		sort(matched_documents.begin(), matched_documents.end(),
+				[](const Document &lhs, const Document &rhs) {
+					if (abs(lhs.relevance - rhs.relevance) < ERROR) {
+						return lhs.rating > rhs.rating;
+					} else {
+						return lhs.relevance > rhs.relevance;
+					}
+				});
+		if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT) {
+			matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT);
+		}
+		return matched_documents;
+	}
+	/**
+	 * Функция сравнивает содержимое документа с номером document_id со строкой запроса raw_query
+	 *
+	 */
+	tuple<vector<string>, DocumentStatus> MatchDocument(const string &raw_query,
+			int document_id) const {
+
+		Query query = ParseQuery(raw_query);
+
+		vector<string> matched_words;
+
+		for (const string &word : query.plus_words) {
+			if (word_to_document_freqs_.count(word) == 0) {
+				continue;
+			}
+
+			if (word_to_document_freqs_.at(word).count(document_id)) {
+				matched_words.push_back(word);
+			}
+
+		}
+
+		for (const string &word : query.minus_words) {
+			if (word_to_document_freqs_.count(word) == 0) {
+				continue;
+			}
+			if (word_to_document_freqs_.at(word).count(document_id)) {
+				matched_words.clear();
+				break;
+			}
+		}
+
+		return {matched_words, documents_.at(document_id).status};
+	}
+
+private:
+	/**
+	 * Данные документа
+	 */
+	struct DocumentData {
+		int rating;
+		DocumentStatus status;
+	};
+
+	set<string> stop_words_;
+
+	/**
+	 * Документы хранятся в коллекции, содержащей информацию о словах, идентификаторах и частотности слов
+	 */
+	map<string, map<int, double>> word_to_document_freqs_;
+
+	map<int, DocumentData> documents_;
+
+	vector<int> document_identifiers_;
+
+	/**
+	 * Проверяет, является ли данное слово стоп-словом
+	 */
+	bool IsStopWord(const string &word) const {
+		return stop_words_.count(word) > 0;
+	}
+	/**
+	 * Разделение строки на отдельные слова с исключением стоп-слов
+	 */
+	vector<string> SplitIntoWordsNoStop(const string &text) const {
+		vector<string> words;
+		for (const string &word : SplitIntoWords(text)) {
+			if (!IsValidWord(word)) {
+				throw invalid_argument(
+						"The word "s + word
+								+ " contains an invalid character!"s);
+			}
+
+			if (!IsStopWord(word)) {
+				words.push_back(word);
+			}
+		}
+		return words;
+	}
+
+	/**
+	 * Вычисление среднего рейтинга
+	 */
+
+	/**
+	 * Структура хранит слово и его признаки
+	 */
+	struct QueryWord {
+		string data;
+		bool is_minus;
+		bool is_stop;
+	};
+
+	QueryWord ParseQueryWord(string text) const {
+		bool is_minus = false;
+
+		if (!IsValidWord(text)) {
+			throw invalid_argument(
+					"The word "s + text + " contains an invalid character!"s);
+		}
+		if (text[0] == '-') {
+			is_minus = true;
+			text = text.substr(1);
+			if (text.empty()) {
+				throw invalid_argument(
+						"The word must not consist of one minus");
+			}
+			if (text[0] == '-') {
+				throw invalid_argument(
+						"The word "s + "-"s + text + " has extra minus!"s);
+			}
+		}
+		return {text, is_minus, IsStopWord(text)};
+	}
+	/**
+	 * Структура хранит наборы плюс и минус слов
+	 */
+	struct Query {
+		set<string> plus_words;
+		set<string> minus_words;
+	};
+
+	Query ParseQuery(const string &text) const {
+		Query query;
+		for (const string &word : SplitIntoWords(text)) {
+
+			const QueryWord query_word = ParseQueryWord(word);
+			if (!query_word.is_stop) {
+				if (query_word.is_minus) {
+					query.minus_words.insert(query_word.data);
+				} else {
+					query.plus_words.insert(query_word.data);
+				}
+			}
+		}
+		return query;
+	}
+
+	/**
+	 *  Вычисление частоты слова в инвертируемом индексе (Inverce document frequency)
+	 */
+	double ComputeWordInverseDocumentFreq(const string &word) const {
+		return log(
+				documents_.size() * 1.0
+						/ word_to_document_freqs_.at(word).size());
+	}
+	/**
+	 * Метод подсчета релевантности всех документов, в которых встречаются слова запроса
+	 * Вторым аргументом метода FindAllDocuments является пользовательская функция фильтрации документов
+	 */
+	template<typename DocumentPredicate>
+	vector<Document> FindAllDocuments(const optional<Query> &query,
+			DocumentPredicate predicate) const {
+		map<int, double> document_to_relevance;
+		for (const string &word : query.value().plus_words) {
+			if (word_to_document_freqs_.count(word) == 0) {
+				continue;
+			}
+			const double inverse_document_freq = ComputeWordInverseDocumentFreq(
+					word);
+			for (const auto [document_id, term_freq] : word_to_document_freqs_.at(
+					word)) {
+				const DocumentData &data = documents_.at(document_id);
+				if (predicate(document_id, data.status, data.rating)) {
+					document_to_relevance[document_id] += term_freq
+							* inverse_document_freq;
+				}
+			}
+		}
+
+		for (const string &word : query.value().minus_words) {
+			if (word_to_document_freqs_.count(word) == 0) {
+				continue;
+			}
+			for (const auto [document_id, _] : word_to_document_freqs_.at(word)) {
+				document_to_relevance.erase(document_id);
+			}
+		}
+
+		vector<Document> matched_documents;
+		for (const auto [document_id, relevance] : document_to_relevance) {
+			matched_documents.push_back( { document_id, relevance,
+					documents_.at(document_id).rating });
+		}
+		return matched_documents;
+	}
+};
+/**
+ * Вывод итогового результата в консоль
+ */
+void PrintMatchDocumentResult(int document_id, const vector<string> &words,
+		DocumentStatus status) {
+	cout << "{ "s << "document_id = "s << document_id << ", "s << "status = "s
+			<< static_cast<int>(status) << ", "s << "words ="s;
+	for (const string &word : words) {
+		cout << ' ' << word;
+	}
+	cout << "}"s << endl;
+}
+/**
+ * Вывод итогового результата в консоль
+ */
+void PrintDocument(const Document &document) {
+	cout << "{ "s << "document_id = "s << document.id << ", "s
+			<< "relevance = "s << document.relevance << ", "s << "rating = "s
+			<< document.rating << " }"s << endl;
+}
+
+class RequestQueue {
+public:
+    explicit RequestQueue(const SearchServer& search_server)
+        : search_server_(search_server)
+        , no_results_requests_(0)
+        , current_time_(0) {
+    }
+
+    template <typename DocumentPredicate>
+    vector<Document> AddFindRequest(const string& raw_query, DocumentPredicate document_predicate);
+    vector<Document> AddFindRequest(const string& raw_query, DocumentStatus status);
+    vector<Document> AddFindRequest(const string& raw_query);
+
+    int GetNoResultRequests() const;
+
+private:
+    struct QueryResult {
+        uint64_t timestamp;
+        int results;
+    };
+    deque<QueryResult> requests_;
+    const SearchServer& search_server_;
+    int no_results_requests_;
+    uint64_t current_time_;
+    const static int sec_in_day_ = 1440;
+
+    void AddRequest(int results_num);
+};
+
+//Template funcions
+template <typename DocumentPredicate>
+vector<Document> RequestQueue::AddFindRequest(const string& raw_query, DocumentPredicate document_predicate) {
+    const auto result = search_server_.FindTopDocuments(raw_query, document_predicate);
+    AddRequest(result.size());
+    return result;
+}
+
+//Public
+vector<Document> RequestQueue::AddFindRequest(const string& raw_query, DocumentStatus status) {
+    const vector<Document> result = search_server_.FindTopDocuments(raw_query, status);
+    AddRequest(result.size());
+    return result;
+}
+
+vector<Document> RequestQueue::AddFindRequest(const string& raw_query) {
+    const std::vector<Document> result = search_server_.FindTopDocuments(raw_query);
+    AddRequest(result.size());
+    return result;
+}
+
+int RequestQueue::GetNoResultRequests() const {
+    return no_results_requests_;
+}
+
+//Private
+void RequestQueue::AddRequest(int results_num) {
+    // новый запрос - новая секунда
+    ++current_time_;
+    // удаляем все результаты поиска, которые устарели
+    while (!requests_.empty() && sec_in_day_ <= current_time_ - requests_.front().timestamp) {
+        if (0 == requests_.front().results) {
+            --no_results_requests_;
+        }
+        requests_.pop_front();
+    }
+    // сохраняем новый результат поиска
+    requests_.push_back({ current_time_, results_num });
+    if (0 == results_num) {
+        ++no_results_requests_;
+    }
+}
+
+
+
+
+int main() {
+
+	SearchServer search_server("and in at"s);
+
+	search_server.AddDocument(1, "curly cat curly tail"s,
+			DocumentStatus::ACTUAL, { 7, 2, 7 });
+	search_server.AddDocument(2, "curly dog and fancy collar"s,
+			DocumentStatus::ACTUAL, { 1, 2, 3 });
+	search_server.AddDocument(3, "big cat fancy collar "s,
+			DocumentStatus::ACTUAL, { 1, 2, 8 });
+	search_server.AddDocument(4, "big dog sparrow Eugene"s,
+			DocumentStatus::ACTUAL, { 1, 3, 2 });
+	search_server.AddDocument(5, "big dog sparrow Vasiliy"s,
+			DocumentStatus::ACTUAL, { 1, 1, 1 });
+
+	RequestQueue request_queue(search_server);
+	// 1439 запросов с нулевым результатом
+
+	for (int i = 0; i < 1439; ++i) {
+		request_queue.AddFindRequest("empty request"s);
+	}
+	// все еще 1439 запросов с нулевым результатом
+	request_queue.AddFindRequest("curly dog"s);
+	// новые сутки, первый запрос удален, 1438 запросов с нулевым результатом
+	request_queue.AddFindRequest("big collar"s);
+	// первый запрос удален, 1437 запросов с нулевым результатом
+	request_queue.AddFindRequest("sparrow"s);
+	cout << "Total empty requests: "s << request_queue.GetNoResultRequests()
+			<< endl;
+	return 0;
+
+}
+/* решение задачи "Выводим результаты поиска страницами" из темы "Итераторы" */
