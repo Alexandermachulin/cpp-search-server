@@ -3,19 +3,18 @@
 #include <string>
 #include <deque>
 
+using namespace std;
+
 class RequestQueue {
 public:
     explicit RequestQueue(const SearchServer& search_server) : search_server_(search_server) {
     }
-    // сделаем "обёртки" для всех методов поиска, чтобы сохранять результаты для нашей статистики
+
     template <typename DocumentPredicate>
-    std::vector<Document> AddFindRequest(const std::string& raw_query, DocumentPredicate document_predicate) {
-        return Request_Processing_(search_server_.FindTopDocuments(raw_query, document_predicate));
-    }
-    
+    std::vector<Document> AddFindRequest(const std::string& raw_query, DocumentPredicate document_predicate);
     std::vector<Document> AddFindRequest(const std::string& raw_query, DocumentStatus status);
-    
     std::vector<Document> AddFindRequest(const std::string& raw_query);
+
     int GetNoResultRequests() const;
 private:
     struct QueryResult {
@@ -31,3 +30,10 @@ private:
     
     std::vector<Document> Request_Processing_(std::vector<Document> result);
 };
+
+//Template funcions
+// сделаем "обёртки" для всех методов поиска, чтобы сохранять результаты для нашей статистики
+template <typename DocumentPredicate>
+std::vector<Document> RequestQueue::AddFindRequest(const std::string& raw_query, DocumentPredicate document_predicate) {
+    return Request_Processing_(search_server_.FindTopDocuments(raw_query, document_predicate));
+}
