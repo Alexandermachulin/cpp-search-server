@@ -4,27 +4,27 @@
 #include "search_server.h"
 
 using namespace std;
+//Вам нужно знать только, что нет дублей, а для этого достаточно проверить,
+//что ранее не была добавлена копия документа. Для этого подойдет контейнер set<set<string>>
 
-void RemoveDuplicates(SearchServer &search_server) {
-    map<set<string_view>, int> list_of_words_in_documents;
-    set<int> remove_ids;
-    for (auto id : search_server) {
-        set<string_view> words;
-        transform(search_server.GetWordFrequencies(id).begin(),
-                  search_server.GetWordFrequencies(id).end(),
-                  inserter(words, words.begin()),
-                  [](const std::pair<std::string_view, double> &word_freq) {
-                      return word_freq.first;
-                  });
+void RemoveDuplicates(SearchServer& search_server) {
+    set<int> duplicates;
+    set<set<string_view>> docs;
+    for (auto i = search_server.begin(); i != search_server.end(); ++i) {
+        const auto &doc = search_server.GetWordFrequencies(*i);
+        set<string_view> doc_words;
 
-        if (list_of_words_in_documents.count(words) == 0) {
-            list_of_words_in_documents[words] = id;
-        } else {
-            remove_ids.insert(id);
+        for (const auto &[word, freq]: doc) {
+            doc_words.insert(word);
+        }
+        if (docs.count(doc_words)) {
+            duplicates.insert(*i);
+        }
+        else {
+            docs.insert(doc_words);
         }
     }
-
-    for (int id : remove_ids) {
+    for (int id : duplicates) {
         search_server.RemoveDocument(id);
         cout << "Found duplicate document id "s << id << endl;
     }
